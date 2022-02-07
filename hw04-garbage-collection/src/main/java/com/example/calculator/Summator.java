@@ -1,22 +1,17 @@
 package com.example.calculator;
 
-import java.util.ArrayList;
-import java.util.List;
-
 public class Summator {
     private int sum = 0;
     private int prevValue = 0;
     private int prevPrevValue = 0;
     private int sumLastThreeValues = 0;
     private int someValue = 0;
-    private final List<Data> listValues = new ArrayList<>();
+    private int receivedValueCount = 0;
 
     //!!! сигнатуру метода менять нельзя
     public void calc(Data data) {
-        listValues.add(data);
-        if (listValues.size() % 6_600_000 == 0) {
-            listValues.clear();
-        }
+        receivedValueCount++;
+
         sum += data.getValue();
 
         sumLastThreeValues = data.getValue() + prevValue + prevPrevValue;
@@ -26,7 +21,7 @@ public class Summator {
 
         for (var idx = 0; idx < 3; idx++) {
             someValue += (sumLastThreeValues * sumLastThreeValues / (data.getValue() + 1) - sum);
-            someValue = Math.abs(someValue) + listValues.size();
+            someValue = Math.abs(someValue) + receivedValueCount;
         }
     }
 
