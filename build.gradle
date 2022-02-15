@@ -37,7 +37,8 @@ allprojects {
     }
 
     dependencies {
-      dependency "com.google.guava:guava:${Version.guava}"
+      dependency("com.google.guava:guava:${Version.guava}")
+      dependency("org.ow2.asm:asm-commons:${Version.ASM}")
     }
   }
 
