@@ -7,4 +7,6 @@
 - Загрузка измененных классов через собственный, не системный, загрузчик (ClassLoader)
 - Вызов метода main стартового класса (mainClass) с флагом, что классы уже подготовлены для работы
 
-_Один из источников, использованных при работе: https://java-online.ru/java-classloader.xhtml_
+_Источники, использованные при работе:_
+- https://java-online.ru/java-classloader.xhtml_
+- Реализация домашнего задания другим студентом https://github.com/AidanMegabyte/otus-java-2021-12
