@@ -3,9 +3,7 @@ package com.example;
 import com.example.annotations.Log;
 import com.example.utils.FileUtils;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.URISyntaxException;
@@ -55,62 +53,17 @@ public class App {
         Class<?> mainClass = FileUtils.getMainClass();
         Collection<String> classFileList =
                 FileUtils.getClassNamesFromPackage(ClassLoader.getSystemClassLoader(), mainClass.getPackageName());
-        MyClassLoader loader = new MyClassLoader();
+
+        MyClassLoader myClassLoader = new MyClassLoader();
         for (String classFile: classFileList) {
-            createProxyForAnnotatedMethods(loader, classFile, Log.class);
+            byte[] changedClassBytes = ASMClass.createProxyForAnnotations(classFile, Log.class);
+            myClassLoader.defineClass(changedClassBytes, classFile.replace(".class", "").replace("/", "."));
         }
 
-        Class<?> clazz = Class.forName(mainClass.getName(), true, loader);
+        Class<?> clazz = Class.forName(mainClass.getName(), true, myClassLoader);
         Object object = clazz.getConstructor().newInstance();
 
         Method method = clazz.getMethod("main", String[].class);
         method.invoke(object, (Object) new String[]{"isChanged"});
-    }
-
-    /**
-     * Поиск и обработка аннотированных методов
-     * @param classLoader загрузчик, в который будет загружаться обработанный класс
-     * @param classFileName имя класса для обработки
-     * @param annotationClass аннотация, с которой методы будут обработаны
-     * */
-    private static void createProxyForAnnotatedMethods(MyClassLoader classLoader, String classFileName,
-                                                       Class<? extends java.lang.annotation.Annotation> annotationClass) throws IOException, ClassNotFoundException
-    {
-        InputStream is = ClassLoader.getSystemClassLoader().getResourceAsStream(classFileName);
-        if (is != null) {
-            String className = classFileName.replace(".class", "").replace("/", ".");
-            Class<?> clazz = Class.forName(className, false, ClassLoader.getSystemClassLoader());
-
-            Collection<Method> annotatedMethods = Arrays.stream(clazz.getMethods())
-                    .filter(method -> method.isAnnotationPresent(annotationClass))
-                    .toList();
-
-            byte[] classBytes;
-            if (!annotatedMethods.isEmpty()) {
-                ASMClass asmClass = new ASMClass(getBytesFromInputStream(is), annotatedMethods);
-                asmClass.createProxies();
-                classBytes = asmClass.getClassBytes();
-            } else {
-                classBytes = getBytesFromInputStream(is);
-            }
-
-            classLoader.defineClass(classBytes, className);
-        }
-    }
-
-    /**
-     * Получение массива байтов из потока
-     * @param inputStream поток для обработки
-     * */
-    private static byte[] getBytesFromInputStream(InputStream inputStream) throws IOException {
-        ByteArrayOutputStream bs = new ByteArrayOutputStream(inputStream.available());
-
-        int nRead;
-        byte[] data = new byte[1024];
-        while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
-            bs.write(data, 0, nRead);
-        }
-
-        return bs.toByteArray();
     }
 }

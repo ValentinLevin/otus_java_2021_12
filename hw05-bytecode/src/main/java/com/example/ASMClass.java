@@ -1,36 +1,45 @@
 package com.example;
 
-import lombok.Getter;
-import lombok.Setter;
+import com.example.utils.IOUtils;
 import org.objectweb.asm.*;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.annotation.Annotation;
 import java.lang.invoke.CallSite;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 
 /**
- * Класс для создания прокси на заданные методы
+ * Класс для создания прокси на методы, отмеченные выбранными аннотациями
  * */
-@Getter
-@Setter
 public class ASMClass {
     private static final String PROXY_PREFIX = "proxied";
     private static final int CURRENT_ASM_API_VERSION = Opcodes.ASM9;
-    private Collection<Method> proxiedMethods;
 
-    private final ClassReader classReader;
-    private final ClassWriter classWriter;
+    private final String classFileName;
+    private final Collection<Class<? extends Annotation>> annotationsForProxying;
+
+    private Class<?> clazz;
+    private Collection<Method> annotatedMethods;
+    private boolean classIsProcessed;
+    private ClassReader classReader;
+    private ClassWriter classWriter;
     private final Handle stringConcatMethodHandle;
-    private final ClassVisitor classVisitor;
 
-    public ASMClass(byte[] classBytes, Collection<Method> proxiedMethods) {
-        this.proxiedMethods = proxiedMethods == null ? new ArrayList<>() : proxiedMethods;
+    public ASMClass(String classFileName) {
+        this(classFileName, (Class<? extends Annotation>) null);
+    }
 
-        this.classReader = new ClassReader(classBytes);
-        this.classWriter = new ClassWriter(classReader, ClassWriter.COMPUTE_MAXS);
+    @SafeVarargs
+    public ASMClass(String classFileName, Class<? extends Annotation>... annotationsForProxying) {
+        this.classFileName = classFileName;
+        this.classIsProcessed = false;
+        this.annotationsForProxying = annotationsForProxying == null ? new ArrayList<>() : Arrays.asList(annotationsForProxying);
 
         this.stringConcatMethodHandle = new Handle(
                 Opcodes.H_INVOKESTATIC,
@@ -38,25 +47,89 @@ public class ASMClass {
                 "makeConcatWithConstants",
                 MethodType.methodType(CallSite.class, MethodHandles.Lookup.class, String.class, MethodType.class, String.class, Object[].class).toMethodDescriptorString(),
                 false);
+    }
 
-        this.classVisitor = new ClassVisitor(CURRENT_ASM_API_VERSION, classWriter) {
+    /**
+     * Метод для обработки класса в одну команду
+     * */
+    @SafeVarargs
+    public static byte[] createProxyForAnnotations(String classFileName, Class<? extends Annotation>... annotations) throws IOException, ClassNotFoundException {
+        ASMClass instance = new ASMClass(classFileName, annotations);
+        instance.createProxies();
+        return instance.getClassBytes();
+    }
+
+    /**
+     * Добавление аннотации в список, для методов которых нужно создать прокси
+     * */
+    public void addAnnotationForProxying(Class<? extends Annotation> annotation) {
+        if (this.classIsProcessed) {
+            throw new RuntimeException("Class is already processed");
+        }
+        this.annotationsForProxying.add(annotation);
+    }
+
+    /**
+     * Удаление аннотации из списка, для методов которых нужно создать прокси
+     * */
+    public void removeAnnotationForProxying(Class<? extends Annotation> annotation) {
+        if (classIsProcessed) {
+            throw new RuntimeException("Class is already processed");
+        }
+
+        this.annotationsForProxying.remove(annotation);
+    }
+
+    /**
+     * Запуск создания прокси для методов
+     * */
+    public void createProxies() throws IOException, ClassNotFoundException {
+        loadClassFromSystemClassLoader();
+        findAnnotatedMethods();
+
+        ClassVisitor classVisitor = new ClassVisitor(CURRENT_ASM_API_VERSION, this.classWriter) {
             @Override
             public MethodVisitor visitMethod(int access, String name, String descriptor, String signature, String[] exceptions) {
-                if (isMethodInProxied(name, descriptor)) {
+                if (isMethodAnnotated(name, descriptor)) {
                     return super.visitMethod(access, getProxiedMethodName(name), descriptor, signature, exceptions);
                 } else {
                     return super.visitMethod(access, name, descriptor, signature, exceptions);
                 }
             }
         };
+
+        classReader.accept(classVisitor, CURRENT_ASM_API_VERSION);
+        annotatedMethods.forEach(this::createProxyForMethod);
+
+        this.classIsProcessed = true;
     }
 
     /**
-     * Запуск создания прокси для методов
+     * Загрузка класса из файла
      * */
-    public void createProxies() {
-        classReader.accept(classVisitor, CURRENT_ASM_API_VERSION);
-        proxiedMethods.forEach(this::setProxyForMethod);
+    private void loadClassFromSystemClassLoader() throws ClassNotFoundException, IOException {
+        InputStream is = ClassLoader.getSystemClassLoader().getResourceAsStream(classFileName);
+        if (is != null) {
+            String className = classFileName.replace(".class", "").replace("/", ".");
+            this.clazz = Class.forName(className, false, ClassLoader.getSystemClassLoader());
+        } else {
+            throw new RuntimeException(String.format("Not found class file with name %s", this.classFileName));
+        }
+
+        this.classReader = new ClassReader(IOUtils.getBytesFromInputStream(is));
+        this.classWriter = new ClassWriter(classReader, ClassWriter.COMPUTE_MAXS);
+    }
+
+    /**
+     * Поиск аннотированных заданными аннотациями методов
+     * */
+    private void findAnnotatedMethods() {
+        this.annotatedMethods =
+                Arrays.stream(clazz.getMethods())
+                    .filter(method ->
+                            Arrays.stream(method.getAnnotations()).anyMatch(item -> this.annotationsForProxying.contains(item.getClass()))
+                    )
+                    .toList();
     }
 
     /**
@@ -71,8 +144,8 @@ public class ASMClass {
      * @param name Имя метода для поиска
      * @param descriptor Дескриптор метода для поиска
      * */
-    private boolean isMethodInProxied(String name, String descriptor) {
-        return this.proxiedMethods.stream()
+    private boolean isMethodAnnotated(String name, String descriptor) {
+        return this.annotatedMethods.stream()
                 .anyMatch(item -> name.equals(item.getName()) && descriptor.equals(Type.getMethodDescriptor(item)));
     }
 
@@ -88,14 +161,14 @@ public class ASMClass {
      * Создание проксирующего метода
      * @param method Метод, для которого создается прокси
      * */
-    private void setProxyForMethod(Method method) {
+    private void createProxyForMethod(Method method) {
         final boolean isMethodStatic = (method.getModifiers() & Opcodes.ACC_STATIC) > 0;
         final String methodDescriptor = Type.getMethodDescriptor(method);
 
         // Создание метода для вывода описания вызванного метода
         MethodVisitor methodVisitor = classWriter.visitMethod(method.getModifiers(), method.getName(), Type.getMethodDescriptor(method), null, null);
 
-        printString(methodVisitor, this.stringConcatMethodHandle, "Executed method: " + method.getName() + ", params: ");
+        addPrintStringInstruction(methodVisitor, this.stringConcatMethodHandle, "Executed method: " + method.getName() + ", params: ");
 
         if (!isMethodStatic) { // Передача this если не статичный метод
             methodVisitor.visitVarInsn(Opcodes.ALOAD, 0);
@@ -119,9 +192,9 @@ public class ASMClass {
             argNum += type.getSize();
 
             if (argIndex < args.length - 1) {
-                printString(methodVisitor, this.stringConcatMethodHandle, ", ");
+                addPrintStringInstruction(methodVisitor, this.stringConcatMethodHandle, ", ");
             } else {
-                printString(methodVisitor, this.stringConcatMethodHandle, "\n");
+                addPrintStringInstruction(methodVisitor, this.stringConcatMethodHandle, "\n");
             }
         }
 
@@ -145,11 +218,11 @@ public class ASMClass {
     }
 
     /**
-     * Печать статичной строки
+     * Добавление инструкции печати статичной строки
      * @param methodVisitor Визитор на класс
      * @param methodHandle Дескриптор на метод соединения строк
      * */
-    private void printString(MethodVisitor methodVisitor, Handle methodHandle, String value) {
+    private void addPrintStringInstruction(MethodVisitor methodVisitor, Handle methodHandle, String value) {
         methodVisitor.visitFieldInsn(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;");
         methodVisitor.visitLdcInsn(value);
         methodVisitor.visitInvokeDynamicInsn("makeConcatWithConstants", "(Ljava/lang/String;)Ljava/lang/String;", methodHandle, "\u0001");
