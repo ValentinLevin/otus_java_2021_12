@@ -8,9 +8,6 @@ public class CustomerService {
 
     private final TreeMap<Customer, String> map = new TreeMap<>(Comparator.comparingLong(Customer::getScores));
 
-    //todo: 3. надо реализовать методы этого класса
-    //важно подобрать подходящую Map-у, посмотрите на редко используемые методы, они тут полезны
-
     private Map.Entry<Customer, String> cloneEntry(Map.Entry<Customer, String> entry) {
         return entry == null ? null : Map.entry(new Customer(entry.getKey()), entry.getValue());
     }
