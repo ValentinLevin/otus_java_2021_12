@@ -1,0 +1,47 @@
+plugins {
+    id 'java'
+    id 'com.github.johnrengelman.shadow'
+}
+
+sourceCompatibility = JavaVersion.VERSION_17
+targetCompatibility = JavaVersion.VERSION_17
+
+dependencies {
+    annotationProcessor 'org.projectlombok:lombok'
+    implementation 'org.projectlombok:lombok'
+    implementation 'org.flywaydb:flyway-core'
+
+    implementation 'ch.qos.logback:logback-classic'
+    implementation 'org.postgresql:postgresql'
+    implementation 'com.h2database:h2'
+    implementation 'org.hibernate:hibernate-core'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api'
+    testImplementation 'org.junit.jupiter:junit-jupiter-engine'
+    testImplementation 'org.junit.jupiter:junit-jupiter-params'
+    testImplementation 'org.assertj:assertj-core'
+    testImplementation 'org.mockito:mockito-junit-jupiter'
+
+    testImplementation 'org.testcontainers:junit-jupiter'
+    testImplementation 'org.testcontainers:postgresql'
+}
+
+shadowJar {
+    archiveBaseName.set("hw10-jpql")
+    archiveClassifier.set("")
+    archiveVersion.set("0.1")
+}
+
+tasks.build.dependsOn tasks.shadowJar
+
+test {
+    useJUnitPlatform()
+}
+
+compileJava.options.encoding = 'UTF-8'
+
+tasks.withType(JavaCompile) {
+    options.with {
+        encoding = "UTF-8"
+    }
+}
