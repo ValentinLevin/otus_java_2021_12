@@ -33,7 +33,7 @@ public class DbServiceClientImpl implements DbServiceClient {
     @Override
     public Client saveClient(Client client) {
         long clientId = transactionRunner.doInTransaction(connection -> {
-            if (Optional.ofNullable(client.getId()).orElse(0L) == 0) {
+            if (client.getId() == null || client.getId() == 0) {
                 return dataTemplate.insert(connection, client);
             } else {
                 dataTemplate.update(connection, client);
@@ -42,17 +42,18 @@ public class DbServiceClientImpl implements DbServiceClient {
         });
 
         Client clientAfterSave = this.getClient(clientId).orElse(null);
-        if (clientAfterSave != null && cache != null) {
-            saveIntoCache(clientAfterSave.getId(), clientAfterSave);
-        }
+        saveIntoCache(clientAfterSave);
         return clientAfterSave;
     }
 
     @Override
     public Optional<Client> getClient(long id) {
-        Client client = this.cache == null ? null : this.cache.get(String.valueOf(id));
+        Client client = getFromCache(id);
         if (client == null) {
-            return transactionRunner.doInTransaction(connection -> dataTemplate.findById(connection, id));
+            Optional<Client> clientFromDB =
+                    transactionRunner.doInTransaction(connection -> dataTemplate.findById(connection, id));
+            clientFromDB.ifPresent(this::saveIntoCache);
+            return clientFromDB;
         } else {
             return Optional.of(client);
         }
@@ -61,9 +62,7 @@ public class DbServiceClientImpl implements DbServiceClient {
     @Override
     public List<Client> findAll() {
         List<Client> clients = transactionRunner.doInTransaction(dataTemplate::findAll);
-        if (this.cache != null) {
-            clients.forEach(client -> saveIntoCache(client.getId(), client));
-        }
+        clients.forEach(this::saveIntoCache);
         return clients;
     }
 
@@ -71,14 +70,24 @@ public class DbServiceClientImpl implements DbServiceClient {
     public void deleteClient(long id) {
         transactionRunner.doInTransaction(connection -> {
             dataTemplate.delete(connection, id);
-            if (this.cache != null) {
-                this.cache.remove(String.valueOf(id));
-            }
+            removeFromCache(id);
             return null;
         });
     }
 
-    private void saveIntoCache(Long id, Client client) {
-        this.cache.put(String.valueOf(id), client);
+    private void saveIntoCache(Client client) {
+        if (cache != null && client != null) {
+            this.cache.put(String.valueOf(client.getId()), client);
+        }
+    }
+
+    private void removeFromCache(Long id) {
+        if (this.cache != null) {
+            this.cache.remove(String.valueOf(id));
+        }
+    }
+
+    private Client getFromCache(Long id) {
+        return this.cache == null ? null : this.cache.get(String.valueOf(id));
     }
 }

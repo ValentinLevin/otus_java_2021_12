@@ -1,6 +1,6 @@
 package com.example.cache;
 
-public enum CACHE_ACTION {
+public enum CacheAction {
     READ("read"),
     SAVE("save"),
     REMOVE("remove");
@@ -11,7 +11,7 @@ public enum CACHE_ACTION {
         return this.name;
     }
 
-    CACHE_ACTION(String name) {
+    CacheAction(String name) {
         this.name = name;
     }
 }

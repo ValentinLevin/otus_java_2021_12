@@ -33,7 +33,7 @@ public class DbServiceManagerImpl implements DbServiceManager {
     @Override
     public Manager saveManager(Manager manager) {
         long managerNo = transactionRunner.doInTransaction(connection -> {
-            if (Optional.ofNullable(manager.getNo()).orElse(0L) == 0) {
+            if (manager.getNo() == null || manager.getNo() == 0) {
                 return dataTemplate.insert(connection, manager);
             } else {
                 dataTemplate.update(connection, manager);
@@ -42,17 +42,18 @@ public class DbServiceManagerImpl implements DbServiceManager {
         });
 
         Manager managerAfterSave = this.getManager(managerNo).orElse(null);
-        if (managerAfterSave != null && this.cache != null) {
-            saveIntoCache(managerAfterSave.getNo(), managerAfterSave);
-        }
+        saveIntoCache(managerAfterSave);
         return managerAfterSave;
     }
 
     @Override
     public Optional<Manager> getManager(long id) {
-        Manager manager = this.cache == null ? null : this.cache.get(String.valueOf(id));
+        Manager manager = getFromCache(id);
         if (manager == null) {
-            return transactionRunner.doInTransaction(connection -> dataTemplate.findById(connection, id));
+            Optional<Manager> managerFromDB =
+                    transactionRunner.doInTransaction(connection -> dataTemplate.findById(connection, id));
+            managerFromDB.ifPresent(this::saveIntoCache);
+            return managerFromDB;
         } else {
             return Optional.of(manager);
         }
@@ -61,9 +62,7 @@ public class DbServiceManagerImpl implements DbServiceManager {
     @Override
     public List<Manager> findAll() {
         List<Manager> managers = transactionRunner.doInTransaction(dataTemplate::findAll);
-        if (this.cache != null) {
-            managers.forEach(manager -> saveIntoCache(manager.getNo(), manager));
-        }
+        managers.forEach(this::saveIntoCache);
         return managers;
     }
 
@@ -71,14 +70,24 @@ public class DbServiceManagerImpl implements DbServiceManager {
     public void deleteManager(long id) {
         transactionRunner.doInTransaction(connection -> {
             dataTemplate.delete(connection, id);
-            if (this.cache != null) {
-                this.cache.remove(String.valueOf(id));
-            }
+            removeFromCache(id);
             return null;
         });
     }
 
-    private void saveIntoCache(Long id, Manager manager) {
-        this.cache.put(String.valueOf(id), manager);
+    private void saveIntoCache(Manager manager) {
+        if (cache != null && manager != null) {
+            this.cache.put(String.valueOf(manager.getNo()), manager);
+        }
+    }
+
+    private void removeFromCache(Long id) {
+        if (this.cache != null) {
+            this.cache.remove(String.valueOf(id));
+        }
+    }
+
+    private Manager getFromCache(Long id) {
+        return this.cache == null ? null : this.cache.get(String.valueOf(id));
     }
 }
