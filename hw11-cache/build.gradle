@@ -1,11 +1,41 @@
 plugins {
     id 'java'
+    id 'com.github.johnrengelman.shadow'
 }
 
 sourceCompatibility = JavaVersion.VERSION_17
 targetCompatibility = JavaVersion.VERSION_17
 
 dependencies {
-    testImplementation 'org.junit.jupiter:junit-jupiter-api'
-    testImplementation 'org.junit.jupiter:junit-jupiter-engine'
+    implementation "ch.qos.logback:logback-classic"
+    implementation "org.flywaydb:flyway-core"
+    implementation "com.zaxxer:HikariCP"
+    implementation "org.postgresql:postgresql"
+
+    testImplementation "org.junit.jupiter:junit-jupiter-engine"
+    testImplementation "org.junit.jupiter:junit-jupiter-api"
+    testImplementation "org.junit.jupiter:junit-jupiter-params"
+    testImplementation "org.assertj:assertj-core"
+    testImplementation "org.mockito:mockito-junit-jupiter"
+
+    testImplementation "org.testcontainers:junit-jupiter"
+    testImplementation "org.testcontainers:postgresql"
+}
+
+shadowJar {
+    archiveBaseName.set("hw09-jdbc")
+    archiveVersion.set("0.1")
+    archiveClassifier.set("")
+}
+
+tasks.build.dependsOn tasks.shadowJar
+
+test {
+    useJUnitPlatform()
+}
+
+tasks.withType(JavaCompile) {
+    options.with {
+        encoding = "UTF-8"
+    }
 }
