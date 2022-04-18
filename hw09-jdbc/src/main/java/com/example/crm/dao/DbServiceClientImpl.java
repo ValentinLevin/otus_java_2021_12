@@ -1,4 +1,4 @@
-package com.example.crm.service;
+package com.example.crm.dao;
 
 import com.example.core.repository.DataTemplateJdbc;
 import com.example.core.sessionmanager.TransactionRunner;
