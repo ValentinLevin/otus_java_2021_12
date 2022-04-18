@@ -42,6 +42,14 @@ allprojects {
 
       dependency("org.testcontainers:junit-jupiter:${Version.testContainers}")
       dependency("org.testcontainers:postgresql:${Version.testContainers}")
+
+      dependency("org.eclipse.jetty:jetty-servlet:${Version.jetty}")
+      dependency("org.eclipse.jetty:jetty-server:${Version.jetty}")
+      dependency("org.eclipse.jetty:jetty-webapp:${Version.jetty}")
+      dependency("org.eclipse.jetty:jetty-security:${Version.jetty}")
+      dependency("org.eclipse.jetty:jetty-http:${Version.jetty}")
+      dependency("org.eclipse.jetty:jetty-io:${Version.jetty}")
+      dependency("org.eclipse.jetty:jetty-util:${Version.jetty}")
     }
   }
 
