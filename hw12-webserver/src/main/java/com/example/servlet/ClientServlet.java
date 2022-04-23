@@ -3,7 +3,6 @@ package com.example.servlet;
 import com.example.dto.ClientDTO;
 import com.example.services.ClientService;
 import com.example.services.TemplateProcessor;
-import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -14,6 +13,9 @@ import java.util.List;
 
 public class ClientServlet extends HttpServlet {
     private static final String CLIENTS_PAGE_TEMPLATE = "clients.ftl";
+    private static final String CLIENT_NAME_PARAM_NAME = "name";
+    private static final String CLIENT_ADDRESS_STREET_PARAM_NAME = "address";
+    private static final String CLIENT_PHONE_NUMBER_PARAM_NAME = "phone";
     private final ClientService clientService;
     private final TemplateProcessor templateProcessor;
 
@@ -31,7 +33,11 @@ public class ClientServlet extends HttpServlet {
     }
 
     @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        super.doPost(req, resp);
+    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String clientName = req.getParameter(CLIENT_NAME_PARAM_NAME);
+        String clientAddress = req.getParameter(CLIENT_ADDRESS_STREET_PARAM_NAME);
+        String[] clientPhoneNumber = req.getParameterValues(CLIENT_PHONE_NUMBER_PARAM_NAME);
+        clientService.addClient(clientName, clientAddress, clientPhoneNumber);
+        resp.sendRedirect("/clients");
     }
 }

@@ -13,7 +13,7 @@
     </script>
 </head>
 <body>
-    <form action="/api/clients" method="post">
+    <form action="/clients" method="post">
         <div>
             <label for="name">Имя клиента</label><input type="text" name="name" id="name">
         </div>

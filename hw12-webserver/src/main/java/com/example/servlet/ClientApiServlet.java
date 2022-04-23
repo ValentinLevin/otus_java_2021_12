@@ -12,9 +12,6 @@ import java.io.IOException;
 import java.util.List;
 
 public class ClientApiServlet extends HttpServlet {
-    private static final String CLIENT_NAME_PARAM_NAME = "name";
-    private static final String CLIENT_ADDRESS_STREET_NAME = "address";
-    private static final String CLIENT_PHONE_NUMBER = "phone";
     private static final int ID_PATH_PARAM_POSITION = 1;
 
     private final ClientService clientService;
@@ -39,15 +36,6 @@ public class ClientApiServlet extends HttpServlet {
         resp.setContentType("application/json;charset=UTF-8");
         ServletOutputStream outStream = resp.getOutputStream();
         outStream.print(value);
-    }
-
-    @Override
-    protected void doPost(HttpServletRequest req, HttpServletResponse resp) throws IOException {
-        String clientName = req.getParameter(CLIENT_NAME_PARAM_NAME);
-        String clientAddress = req.getParameter(CLIENT_ADDRESS_STREET_NAME);
-        String[] clientPhoneNumber = req.getParameterValues(CLIENT_PHONE_NUMBER);
-        clientService.addClient(clientName, clientAddress, clientPhoneNumber);
-        resp.sendRedirect("/clients");
     }
 
     private Long extractIdFromRequest(HttpServletRequest request) {

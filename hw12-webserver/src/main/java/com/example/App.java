@@ -37,13 +37,12 @@ public class App {
         var transactionManager = new TransactionManagerHibernate(sessionFactory);
 
         var clientTemplate = new DataTemplateHibernate<>(Client.class);
-        var clientDAO = new DBServiceClientImpl(transactionManager, clientTemplate);
-        var clientService = new ClientServiceImpl(clientDAO);
+        var dbServiceClient = new DBServiceClientImpl(transactionManager, clientTemplate);
+        var clientService = new ClientServiceImpl(dbServiceClient);
 
         var userTemplate = new DataTemplateHibernate<>(User.class);
-        var userDAO = new DBServiceUserImpl(transactionManager, userTemplate);
-        var userService = new UserServiceImpl(userDAO);
-        createDummyUser(userService, "admin", "12345");
+        var dbServiceUser = new DBServiceUserImpl(transactionManager, userTemplate);
+        var userService = new UserServiceImpl(dbServiceUser);
 
         var objectMapper = new ObjectMapper();
         var templateProcessor = new TemplateProcessorFreemarker(TEMPLATES_DIR);
@@ -51,11 +50,5 @@ public class App {
         WebServer webServer = new WebServerImpl(WEB_SERVER_PORT, clientService, userService, objectMapper, templateProcessor);
         webServer.start();
         webServer.join();
-    }
-
-    private static void createDummyUser(UserService userService, String username, String password) {
-        if (!userService.isExists(username)) {
-            userService.createUser(username, password);
-        }
     }
 }
