@@ -1,4 +1,4 @@
-package com.example.config;
+package com.example.separatedconfig;
 
 import com.example.appcontainer.api.AppComponent;
 import com.example.appcontainer.api.AppComponentsContainerConfig;

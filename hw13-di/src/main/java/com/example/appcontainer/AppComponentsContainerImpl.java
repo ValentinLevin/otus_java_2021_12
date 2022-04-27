@@ -3,9 +3,7 @@ package com.example.appcontainer;
 import com.example.appcontainer.api.AppComponent;
 import com.example.appcontainer.api.AppComponentsContainer;
 import com.example.appcontainer.api.AppComponentsContainerConfig;
-import com.example.exception.CircularDependencyException;
-import com.example.exception.NotFoundComponentException;
-import com.example.exception.TooManyComponentException;
+import com.example.exception.*;
 import com.example.helper.ReflectionHelper;
 import org.reflections.Reflections;
 import org.reflections.scanners.Scanners;
@@ -14,8 +12,8 @@ import java.lang.reflect.Method;
 import java.util.*;
 
 public class AppComponentsContainerImpl implements AppComponentsContainer {
-    private final Map<String, AppComponentInfo> appComponentsByName = new HashMap<>();
-    private final Map<Class<?>, AppComponentInfo> appComponentsByClass = new HashMap<>();
+    private final List<Object> appComponents = new ArrayList<>();
+    private final Map<String, Object> appComponentsByName = new HashMap<>();
 
     public AppComponentsContainerImpl(Class<?>...initialConfigClasses) {
         processConfig(initialConfigClasses);
@@ -28,10 +26,13 @@ public class AppComponentsContainerImpl implements AppComponentsContainer {
     }
 
     private void processConfig(Class<?>...configClasses) {
+        Map<String, AppComponentDefinition> appComponentDefinitions = new HashMap<>();
         for (Class<?> configClass: configClasses) {
             checkConfigClass(configClass);
-            readAnnotatedMethods(configClass);
+            Map<String, AppComponentDefinition> configClassComponentDefinitions = createComponentDefinitions(configClass);
+            appComponentDefinitions.putAll(configClassComponentDefinitions);
         }
+        createAppComponents(appComponentDefinitions);
     }
 
     private void checkConfigClass(Class<?> configClass) {
@@ -40,116 +41,101 @@ public class AppComponentsContainerImpl implements AppComponentsContainer {
         }
     }
 
-    private void readAnnotatedMethods(Class<?> configClass) {
+    private Map<String, AppComponentDefinition> createComponentDefinitions(Class<?> configClass) {
+        Map<String, AppComponentDefinition> configClassComponentDefinitions = new HashMap<>();
         Object configClassObject = null;
         for (Method method: ReflectionHelper.getAnnotatedMethods(AppComponent.class, configClass)) {
-            Class<?> componentClass = method.getReturnType();
-            if (!appComponentsByClass.containsKey(componentClass)) {
-                if (configClassObject == null) {
-                    configClassObject = ReflectionHelper.instantiate(configClass);
-                }
+            AppComponent appComponentAnnotation = method.getAnnotation(AppComponent.class);
+            String componentName = appComponentAnnotation.name();
 
-                AppComponent appComponentAnnotation = method.getAnnotation(AppComponent.class);
-                String componentName = appComponentAnnotation.name();
-                AppComponentInfo appComponentInfo = new AppComponentInfo(method, componentClass, componentName, configClassObject);
+            if (configClassComponentDefinitions.containsKey(componentName)) {
+                throw new ComponentAlreadyExistsException(componentName);
+            }
 
-                appComponentsByClass.put(componentClass, appComponentInfo);
-                appComponentsByName.put(componentName, appComponentInfo);
-                appComponentsByName.put(componentClass.getSimpleName(), appComponentInfo);
-                appComponentsByName.put(componentClass.getCanonicalName(), appComponentInfo);
-                for (Class<?> classInterface: componentClass.getInterfaces()) {
-                    appComponentsByName.put(classInterface.getSimpleName(), appComponentInfo);
-                    appComponentsByName.put(classInterface.getCanonicalName(), appComponentInfo);
+            if (configClassObject == null) {
+                configClassObject = ReflectionHelper.instantiate(configClass);
+            }
+            configClassComponentDefinitions.put(componentName, new AppComponentDefinition(method, componentName, configClassObject));
+        }
+
+        return configClassComponentDefinitions;
+    }
+
+    private void createAppComponents(Map<String, AppComponentDefinition> appComponentDefinitions) {
+        boolean atLeastOneComponentCreated;
+        do {
+            atLeastOneComponentCreated = false;
+            for (AppComponentDefinition appComponentDefinition : appComponentDefinitions.values()) {
+                if (!appComponentsByName.containsKey(appComponentDefinition.name())) {
+                    Object appComponent = createAppComponent(appComponentDefinition);
+                    if (appComponent != null) {
+                        appComponents.add(appComponent);
+                        appComponentsByName.put(appComponentDefinition.name(), appComponent);
+                        atLeastOneComponentCreated = true;
+                    }
                 }
             }
+        } while (appComponentsByName.size() < appComponentDefinitions.size() && atLeastOneComponentCreated);
+
+        if (appComponentDefinitions.size() > appComponentsByName.size()) {
+            throw new AppComponentProcessException("Failed to find required objects to create components");
         }
     }
 
-    @Override
-    public <C> C getAppComponent(Class<C> componentClass) {
-        List<Class<?>> assignableComponentClasses =
-                appComponentsByClass.keySet().stream()
-                        .filter(item -> item.isAssignableFrom(componentClass))
-                        .toList();
-
-        if (assignableComponentClasses.isEmpty()) {
-            throw new NotFoundComponentException(componentClass);
+    private <C> C createAppComponent(AppComponentDefinition appComponentInfo) {
+        Object[] methodParamObjects;
+        try {
+            methodParamObjects = prepareObjectsForMethodParams(appComponentInfo.creationMethod());
+        } catch (NotFoundComponentForMethodParams e) {
+            return null;
         }
 
-        if (assignableComponentClasses.size() > 1) {
-            throw new TooManyComponentException(componentClass);
-        }
-
-        Class<?> appComponentClass = assignableComponentClasses.get(0);
-
-        C appComponent = appComponentsByClass.get(appComponentClass).getAppComponent();
-        if (appComponent == null) {
-            appComponent = loadComponent(appComponentClass, new ArrayList<>());
-        }
-
-        return appComponent;
+        return ReflectionHelper.callMethod(
+                appComponentInfo.creationMethod(),
+                appComponentInfo.configClassObject(),
+                methodParamObjects
+        );
     }
 
-    @Override
-    public <C> C getAppComponent(String componentName) {
-        AppComponentInfo appComponentInfo = appComponentsByName.get(componentName);
-        if (appComponentInfo.getAppComponent() == null) {
-            return loadComponent(appComponentInfo.componentClass, new ArrayList<>());
-        } else {
-            return appComponentInfo.getAppComponent();
-        }
-    }
-
-    private <C> C loadComponent(Class<?> componentClass, List<Class<?>> dependencyChain) {
-        AppComponentInfo appComponentInfo = appComponentsByClass.get(componentClass);
-
-        if (dependencyChain.contains(componentClass)) {
-            throw new CircularDependencyException(appComponentInfo.name);
-        } else {
-            dependencyChain.add(componentClass);
-        }
-
-        Object[] methodParamObjects = prepareObjectsForMethodParams(appComponentInfo.creationMethod, dependencyChain);
-        C appComponent = ReflectionHelper.callMethod(appComponentInfo.creationMethod, appComponentInfo.configClassObject, methodParamObjects);
-        appComponentInfo.setAppComponent(appComponent);
-        return appComponent;
-    }
-
-    private Object[] prepareObjectsForMethodParams(Method method, List<Class<?>> dependencies) {
+    private Object[] prepareObjectsForMethodParams(Method method) {
         Class<?>[] methodParamClasses = method.getParameterTypes();
         Object[] methodParamObjects = new Object[methodParamClasses.length];
 
         for (int i = 0; i < methodParamClasses.length; i++) {
-            Object methodParamObject = appComponentsByClass.get(methodParamClasses[i]).appComponent;
-            if (methodParamObject == null) {
-                methodParamObject = loadComponent(methodParamClasses[i], dependencies);
+            Object appComponentForMethodParam = findAppComponentByComponentClass(methodParamClasses[i]);
+            if (appComponentForMethodParam != null) {
+                methodParamObjects[i] = appComponentForMethodParam;
+            } else {
+                throw new NotFoundComponentForMethodParams(methodParamClasses[i]);
             }
-            methodParamObjects[i] = methodParamObject;
         }
         return methodParamObjects;
     }
 
-    private static class AppComponentInfo {
-        private final Method creationMethod;
-        private final Class<?> componentClass;
-        private final Object configClassObject;
-        private Object appComponent;
-        private final String name;
-
-        public void setAppComponent(Object appComponent) {
-            this.appComponent = appComponent;
-        }
-
-        public <C> C getAppComponent() {
-            return (C) this.appComponent;
-        }
-
-        AppComponentInfo(Method creationMethod, Class<?> componentClass, String name, Object configClassObject) {
-            this.creationMethod = creationMethod;
-            this.componentClass = componentClass;
-            this.configClassObject = configClassObject;
-            this.name = name;
-            this.appComponent = null;
-        }
+    @Override
+    public <C> C getAppComponent(Class<C> componentClass) {
+        return Optional.ofNullable(findAppComponentByComponentClass(componentClass))
+                .orElseThrow(() -> new NotFoundComponentException(componentClass));
     }
+
+    @Override
+    public <C> C getAppComponent(String componentName) {
+        return Optional.ofNullable((C) appComponentsByName.get(componentName))
+                .orElseThrow(() -> new NotFoundComponentException(componentName));
+    }
+
+    private <C> C findAppComponentByComponentClass(Class<C> componentClass) {
+        List<Object> assignableComponents =
+                appComponents.stream()
+                        .filter(component -> componentClass.isAssignableFrom(component.getClass()))
+                        .toList();
+
+        if (assignableComponents.size() > 1) {
+            throw new TooManyComponentException(componentClass);
+        }
+
+        return assignableComponents.isEmpty() ? null : (C) assignableComponents.get(0);
+    }
+
+    private record AppComponentDefinition(Method creationMethod, String name, Object configClassObject) { }
 }
