@@ -50,6 +50,7 @@ allprojects {
       dependency("org.eclipse.jetty:jetty-http:${Version.jetty}")
       dependency("org.eclipse.jetty:jetty-io:${Version.jetty}")
       dependency("org.eclipse.jetty:jetty-util:${Version.jetty}")
+      dependency("org.reflections:reflections:${Version.reflections}")
     }
   }
 

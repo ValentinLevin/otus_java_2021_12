@@ -4,4 +4,5 @@ public interface Version {
   String testContainers = "1.16.3";
   String jetty = "11.0.9";
   String freemarker = "2.3.31";
+  String reflections = "0.10.2";
 }
