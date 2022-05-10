@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+
+    <style type="text/css">
+        body {
+            padding: 50px;
+        }
+
+        .clients, .clients td {
+            border: 1px solid lightgray;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+
+        a {
+            display: block;
+        }
+
+        input {
+            width: 150px;
+        }
+
+        select {
+            width: 154px;
+        }
+
+        button {
+            width: 250px;
+        }
+
+        h3 {
+            padding: 2px;
+            padding-left: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h3>Клиенты</h3>
+    <table class="clients">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Address</th>
+                <th>Phones</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="client: ${clients}">
+                <td th:text="${client.id}">1</td>
+                <td th:text="${client.name}">client name</td>
+                <td th:text="${client.address.street}">client address</td>
+                <td>
+                    <ul>
+                        <li th:each="phone: ${client.phones}" th:text="${phone.number}">phone number</li>
+                    </ul>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+<a th:href="@{/client/create}" href="clientCreate.html">New client</a>
+</body>
+</html>
